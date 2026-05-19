@@ -5,13 +5,23 @@ the old version had a prompt that demanded social-media analysis but the
 only tool available was Yahoo Finance news — which led LLMs to fabricate
 Reddit/X/StockTwits content under prompt pressure (verified live).
 
-The redesigned agent pre-fetches three complementary data sources before
-the LLM is invoked and injects them into the prompt as structured blocks:
+The redesigned agent pre-fetches complementary data sources before the LLM
+is invoked and injects them into the prompt as structured blocks:
 
   1. News headlines     — Yahoo Finance (institutional framing)
   2. StockTwits messages — retail-trader posts indexed by cashtag, with
                            user-labeled Bullish/Bearish sentiment tags
-  3. Reddit posts        — r/wallstreetbets, r/stocks, r/investing
+                           (omitted for Indonesian .JK tickers — IDX is not
+                           covered by StockTwits)
+  3. Reddit posts        — r/wallstreetbets, r/stocks, r/investing for US
+                           and most international tickers; r/finansial and
+                           r/indonesia for Indonesian (.JK) tickers
+  4. Investor.id news    — Indonesian financial news (Bahasa Indonesia) for
+                           .JK tickers, sourced from investor.id's public
+                           sitemap (/sitemap_news.xml)
+
+Source selection is routed by ticker suffix so each market gets the most
+relevant community signal available.
 
 The agent does not use tool-calling; the data is in the prompt from
 turn 0. The LLM produces the sentiment report in a single invocation.
@@ -27,8 +37,32 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
     get_news,
 )
-from tradingagents.dataflows.reddit import fetch_reddit_posts
+from tradingagents.dataflows.investor_id import fetch_investor_id_news
+from tradingagents.dataflows.reddit import DEFAULT_SUBREDDITS, fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
+
+
+# Subreddits to search for Indonesian (.JK) tickers.
+# r/finansial is the primary Indonesian personal-finance / investing subreddit;
+# r/indonesia is a general community that occasionally discusses IDX stocks.
+_INDONESIAN_SUBREDDITS = ("finansial", "indonesia")
+
+
+def _is_indonesian_ticker(ticker: str) -> bool:
+    """Return True if ``ticker`` uses the Jakarta Stock Exchange suffix."""
+    return ticker.upper().endswith(".JK")
+
+
+def _resolve_sources(ticker: str):
+    """Pick the best sentiment data sources for ``ticker`` by exchange suffix.
+
+    Returns ``(subreddits, use_stocktwits)``.  Indonesian (.JK) tickers get
+    r/finansial and r/indonesia with StockTwits disabled (IDX is not covered
+    by StockTwits).  All other tickers use the US-centric defaults.
+    """
+    if _is_indonesian_ticker(ticker):
+        return _INDONESIAN_SUBREDDITS, False
+    return DEFAULT_SUBREDDITS, True
 
 
 def _seven_days_back(trade_date: str) -> str:
@@ -38,9 +72,13 @@ def _seven_days_back(trade_date: str) -> str:
 def create_sentiment_analyst(llm):
     """Create a sentiment analyst node for the trading graph.
 
-    Pre-fetches news + StockTwits + Reddit data, injects them into the
-    prompt as structured blocks, and produces a sentiment report in a
-    single LLM call.
+    Pre-fetches news + StockTwits (when available) + Reddit data, injects
+    them into the prompt as structured blocks, and produces a sentiment
+    report in a single LLM call.
+
+    Source selection is routed by ticker suffix — Indonesian (.JK) tickers
+    use r/finansial and r/indonesia instead of US-centric subreddits, and
+    skip StockTwits (which has no IDX coverage).
     """
 
     def sentiment_analyst_node(state):
@@ -49,12 +87,24 @@ def create_sentiment_analyst(llm):
         start_date = _seven_days_back(end_date)
         instrument_context = build_instrument_context(ticker)
 
-        # Pre-fetch all three sources. Each fetcher degrades gracefully and
-        # returns a string (no exceptions surface from here), so the LLM
-        # always sees something — either real data or a clear placeholder.
+        subreddits, use_stocktwits = _resolve_sources(ticker)
+        use_investor_id = _is_indonesian_ticker(ticker)
+
+        # Pre-fetch sources. Each fetcher degrades gracefully and returns
+        # a string, so the LLM always sees something — either real data
+        # or a clear placeholder.
         news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
+        stocktwits_block = (
+            fetch_stocktwits_messages(ticker, limit=30)
+            if use_stocktwits
+            else "<StockTwits does not cover Indonesian (IDX) stocks — source omitted.>"
+        )
+        reddit_block = fetch_reddit_posts(ticker, subreddits=subreddits)
+        investor_id_block = (
+            fetch_investor_id_news(limit=30)
+            if use_investor_id
+            else None
+        )
 
         system_message = _build_system_message(
             ticker=ticker,
@@ -63,6 +113,8 @@ def create_sentiment_analyst(llm):
             news_block=news_block,
             stocktwits_block=stocktwits_block,
             reddit_block=reddit_block,
+            subreddits=subreddits,
+            investor_id_block=investor_id_block,
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -104,9 +156,43 @@ def _build_system_message(
     news_block: str,
     stocktwits_block: str,
     reddit_block: str,
+    subreddits: tuple[str, ...] = DEFAULT_SUBREDDITS,
+    investor_id_block: str | None = None,
 ) -> str:
     """Assemble the sentiment-analyst system message with structured data blocks."""
-    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
+
+    subs_str = ", ".join(f"r/{s}" for s in subreddits)
+    is_indonesian = _is_indonesian_ticker(ticker)
+
+    if is_indonesian:
+        reddit_context = (
+            "Indonesian-language investing discussion. "
+            "r/finansial covers personal finance and IDX stock talk; "
+            "r/indonesia is a general community with occasional market discussion."
+        )
+    else:
+        reddit_context = (
+            "Engagement signal via upvote score and comment count. "
+            "Subreddit character matters (r/wallstreetbets is often contrarian/exuberant; "
+            "r/stocks more measured; r/investing longer-term)."
+        )
+
+    # Build the investor.id block if available
+    investor_id_section = ""
+    if investor_id_block:
+        investor_id_section = f"""
+### Investor.id — Indonesian financial news (Bahasa Indonesia)
+Domestic market news covering IHSG movement, individual stocks, foreign
+investor flows (net buy/net sell), corporate actions, and macroeconomic
+context.  Article titles are approximated from URL slugs.  Articles are
+in Bahasa Indonesia; use your multilingual capability to interpret them.
+
+<start_of_investor_id>
+{investor_id_block}
+<end_of_investor_id>
+"""
+
+    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on the data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
 
@@ -124,13 +210,13 @@ Fast-moving signal. Each message carries a user-labeled sentiment tag (Bullish /
 {stocktwits_block}
 <end_of_stocktwits>
 
-### Reddit posts — r/wallstreetbets, r/stocks, r/investing (past 7 days)
-Community discussion. Engagement signal via upvote score and comment count. Subreddit character matters (r/wallstreetbets is often contrarian/exuberant; r/stocks more measured; r/investing longer-term).
+### Reddit posts — {subs_str} (past 7 days)
+{reddit_context}
 
 <start_of_reddit>
 {reddit_block}
 <end_of_reddit>
-
+{investor_id_section}
 ## How to analyze this data (best practices)
 
 1. **Read the StockTwits Bullish/Bearish ratio as a leading retail-sentiment signal.** A 70/30 bullish/bearish split is moderately bullish; ≥90/10 may indicate over-extension and contrarian risk; 50/50 is uncertainty. Sample size matters — base rates on the actual message count, not percentages alone.

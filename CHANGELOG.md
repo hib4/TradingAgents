@@ -13,6 +13,14 @@ Breaking changes within the 0.x line are called out explicitly.
 - **Indonesian stock support.** `.JK` tickers (Jakarta Stock Exchange) now
   auto-resolve to `^JKSE` (IDX Composite / IHSG) as their regional benchmark,
   eliminating SPY alpha drift for IDX-listed stocks.
+- **Indonesian sentiment data routing.** The Sentiment Analyst now searches
+  r/finansial and r/indonesia (instead of US-centric subreddits) for `.JK`
+  tickers and gracefully omits StockTwits (which has no IDX coverage).
+- **Investor.id news integration.** `.JK` tickers now include Indonesian
+  financial news from investor.id (via the public `/sitemap_news.xml` feed,
+  respecting robots.txt), providing domestic market context in Bahasa
+  Indonesia — IHSG movement, individual stock coverage, foreign investor
+  flows, and corporate actions.
 
 ## [0.2.5] — 2026-05-11
 
