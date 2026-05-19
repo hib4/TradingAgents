@@ -150,8 +150,9 @@ _PASSTHROUGH_KWARGS = (
 _PROVIDER_BASE_URL = {
     "xai":        "https://api.x.ai/v1",
     "deepseek":   "https://api.deepseek.com",
-    "qwen":       "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-    "qwen-cn":    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "qwen":        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "qwen-coding": "https://coding-intl.dashscope.aliyuncs.com/v1",
+    "qwen-cn":     "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "glm":        "https://api.z.ai/api/paas/v4/",
     "glm-cn":     "https://open.bigmodel.cn/api/paas/v4/",
     "minimax":    "https://api.minimax.io/v1",

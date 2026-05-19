@@ -405,6 +405,10 @@ def ask_qwen_region() -> tuple[str, str]:
                 value=("qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
             ),
             questionary.Choice(
+                "Coding International — coding-intl.dashscope.aliyuncs.com (uses DASHSCOPE_API_KEY)",
+                value=("qwen-coding", "https://coding-intl.dashscope.aliyuncs.com/v1"),
+            ),
+            questionary.Choice(
                 "China — dashscope.aliyuncs.com (uses DASHSCOPE_CN_API_KEY)",
                 value=("qwen-cn", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
             ),

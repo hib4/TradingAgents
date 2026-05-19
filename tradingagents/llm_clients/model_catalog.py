@@ -144,6 +144,7 @@ MODEL_OPTIONS: ProviderModeOptions = {
     # Qwen: same model IDs across global (dashscope-intl) and China
     # (dashscope) endpoints, so the two provider keys share one model list.
     "qwen": _QWEN_MODELS,
+    "qwen-coding": _QWEN_MODELS,
     "qwen-cn": _QWEN_MODELS,
     # GLM: Z.AI (international) and BigModel (China) host the same model
     # IDs; the two provider keys share one model list.
