@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## [Unreleased]
+
+### Added
+
+- **Indonesian stock support.** `.JK` tickers (Jakarta Stock Exchange) now
+  auto-resolve to `^JKSE` (IDX Composite / IHSG) as their regional benchmark,
+  eliminating SPY alpha drift for IDX-listed stocks.
+
 ## [0.2.5] — 2026-05-11
 
 ### Added
