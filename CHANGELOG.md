@@ -26,6 +26,11 @@ Breaking changes within the 0.x line are called out explicitly.
   at `/rss`), covering the stock exchange (Bursa), corporate actions,
   macroeconomic indicators, and financial sector — with article categories,
   dates, and author attribution.
+- **BloombergTechnoz news integration.** `.JK` tickers now include
+  Indonesian market/financial news from bloombergtechnoz.com (via the
+  public RSS feed at `/rss`), covering IHSG, individual stock
+  recommendations, macro policy, energy/commodities, and the financial
+  sector — with inferred article categories for context.
 
 ## [0.2.5] — 2026-05-11
 

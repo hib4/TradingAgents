@@ -22,6 +22,11 @@ is invoked and injects them into the prompt as structured blocks:
   5. Katadata news       — Indonesian business/financial news (Bahasa
                            Indonesia) for .JK tickers, sourced from
                            katadata.co.id's public RSS feed
+  6. BloombergTechnoz    — Indonesian market/financial news (Bahasa
+                           Indonesia) for .JK tickers, covering IHSG,
+                           stocks, macro policy, energy/commodities, and
+                           financial sector — sourced from
+                           bloombergtechnoz.com's public RSS feed
 
 Source selection is routed by ticker suffix so each market gets the most
 relevant community signal available.
@@ -40,6 +45,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
     get_news,
 )
+from tradingagents.dataflows.bloomberg_technoz import fetch_bloomberg_technoz_news
 from tradingagents.dataflows.investor_id import fetch_investor_id_news
 from tradingagents.dataflows.katadata import fetch_katadata_news
 from tradingagents.dataflows.reddit import DEFAULT_SUBREDDITS, fetch_reddit_posts
@@ -94,6 +100,7 @@ def create_sentiment_analyst(llm):
         subreddits, use_stocktwits = _resolve_sources(ticker)
         use_investor_id = _is_indonesian_ticker(ticker)
         use_katadata = _is_indonesian_ticker(ticker)
+        use_bloomberg_technoz = _is_indonesian_ticker(ticker)
 
         # Pre-fetch sources. Each fetcher degrades gracefully and returns
         # a string, so the LLM always sees something — either real data
@@ -115,6 +122,11 @@ def create_sentiment_analyst(llm):
             if use_katadata
             else None
         )
+        bloomberg_technoz_block = (
+            fetch_bloomberg_technoz_news(limit=30)
+            if use_bloomberg_technoz
+            else None
+        )
 
         system_message = _build_system_message(
             ticker=ticker,
@@ -126,6 +138,7 @@ def create_sentiment_analyst(llm):
             subreddits=subreddits,
             investor_id_block=investor_id_block,
             katadata_block=katadata_block,
+            bloomberg_technoz_block=bloomberg_technoz_block,
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -170,6 +183,7 @@ def _build_system_message(
     subreddits: tuple[str, ...] = DEFAULT_SUBREDDITS,
     investor_id_block: str | None = None,
     katadata_block: str | None = None,
+    bloomberg_technoz_block: str | None = None,
 ) -> str:
     """Assemble the sentiment-analyst system message with structured data blocks."""
 
@@ -219,6 +233,21 @@ in Bahasa Indonesia; use your multilingual capability to interpret them.
 <end_of_katadata>
 """
 
+    # Build the bloombergtechnoz block if available
+    bloomberg_technoz_section = ""
+    if bloomberg_technoz_block:
+        bloomberg_technoz_section = f"""
+### BloombergTechnoz — Indonesian market/financial news (Bahasa Indonesia)
+Market and financial news covering IHSG, individual stocks, macro policy,
+energy/commodities, and the financial sector.  Includes article titles with
+inferred categories (Market, Economy, Financial, Energy, Global).  Articles
+are in Bahasa Indonesia; use your multilingual capability to interpret them.
+
+<start_of_bloomberg_technoz>
+{bloomberg_technoz_block}
+<end_of_bloomberg_technoz>
+"""
+
     return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on the data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
@@ -243,7 +272,7 @@ Fast-moving signal. Each message carries a user-labeled sentiment tag (Bullish /
 <start_of_reddit>
 {reddit_block}
 <end_of_reddit>
-{investor_id_section}{katadata_section}
+{investor_id_section}{katadata_section}{bloomberg_technoz_section}
 ## How to analyze this data (best practices)
 
 1. **Read the StockTwits Bullish/Bearish ratio as a leading retail-sentiment signal.** A 70/30 bullish/bearish split is moderately bullish; ≥90/10 may indicate over-extension and contrarian risk; 50/50 is uncertainty. Sample size matters — base rates on the actual message count, not percentages alone.
