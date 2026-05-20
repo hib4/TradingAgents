@@ -21,6 +21,11 @@ Breaking changes within the 0.x line are called out explicitly.
   respecting robots.txt), providing domestic market context in Bahasa
   Indonesia — IHSG movement, individual stock coverage, foreign investor
   flows, and corporate actions.
+- **Katadata news integration.** `.JK` tickers now include Indonesian
+  business and economic news from katadata.co.id (via the public RSS feed
+  at `/rss`), covering the stock exchange (Bursa), corporate actions,
+  macroeconomic indicators, and financial sector — with article categories,
+  dates, and author attribution.
 
 ## [0.2.5] — 2026-05-11
 
